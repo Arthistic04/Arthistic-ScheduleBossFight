@@ -227,7 +227,7 @@ public class ScheduleBossFight : BaseUnityPlugin
         var unlockAt = config(
             section,
             "UnlockAt",
-            "2026-01-01 18:00",
+            "2027-01-01 18:00",
             "Philippines time (GMT+8). Format: yyyy-MM-dd HH:mm[:ss]"
         );
 
