@@ -7,7 +7,7 @@
       "RelativeMoniker": "D:0:0:{2F5AA84F-A742-4432-89B9-6A658855CAB6}|Arthistic-ScheduleBossFight\\Arthistic-ScheduleBossFight.csproj|solutionrelative:arthistic-schedulebossfight\\class1.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{2F5AA84F-A742-4432-89B9-6A658855CAB6}|Arthistic-ScheduleBossFight\\Arthistic-ScheduleBossFight.csproj|c:\\users\\arthur\\source\\repos\\arthistic-schedulebossfight\\arthistic-schedulebossfight\\ilrepack.targets||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "AbsoluteMoniker": "D:0:0:{2F5AA84F-A742-4432-89B9-6A658855CAB6}|Arthistic-ScheduleBossFight\\Arthistic-ScheduleBossFight.csproj|C:\\Users\\Arthur\\source\\repos\\Arthistic-ScheduleBossFight\\arthistic-schedulebossfight\\ilrepack.targets||{8B382828-6202-11D1-8870-0000F87579D2}",
       "RelativeMoniker": "D:0:0:{2F5AA84F-A742-4432-89B9-6A658855CAB6}|Arthistic-ScheduleBossFight\\Arthistic-ScheduleBossFight.csproj|solutionrelative:arthistic-schedulebossfight\\ilrepack.targets||{8B382828-6202-11D1-8870-0000F87579D2}"
     }
   ],
@@ -30,8 +30,7 @@
               "RelativeToolTip": "Arthistic-ScheduleBossFight\\ILRepack.targets",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAkAAAAKAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003801|",
-              "WhenOpened": "2026-02-07T07:02:31.967Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-02-07T07:02:31.967Z"
             },
             {
               "$type": "Document",
@@ -41,7 +40,7 @@
               "RelativeDocumentMoniker": "Arthistic-ScheduleBossFight\\Class1.cs",
               "ToolTip": "C:\\Users\\Arthur\\source\\repos\\Arthistic-ScheduleBossFight\\Arthistic-ScheduleBossFight\\Class1.cs",
               "RelativeToolTip": "Arthistic-ScheduleBossFight\\Class1.cs",
-              "ViewState": "AgIAADYAAAAAAAAAAAAQwFEAAABDAAAAAAAAAA==",
+              "ViewState": "AgIAAFYBAAAAAAAAAAArwHMBAAAdAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-02-07T05:20:08.788Z",
               "EditorCaption": ""

@@ -27,11 +27,15 @@ public class ScheduleBossFight : BaseUnityPlugin
 
     private class BossEntry
     {
+        public string Section;
+        public string AltarPrefab;
         public string Key;
         public string TrophyName;
+
         public ConfigEntry<string> DisplayName;
         public ConfigEntry<bool> Enabled;
         public ConfigEntry<string> UnlockAt;
+
         public bool BroadcastedTomorrow;
         public bool BroadcastedCountdown;
         public bool UnlockedToday;
@@ -84,23 +88,25 @@ public class ScheduleBossFight : BaseUnityPlugin
             DisplayName = "Scheduled Boss Fight",
             CurrentVersion = "1.0.4"
         };
-        checkInterval = config("General", "CheckIntervalSeconds", 300, "How often to check unlock dates (seconds).");
-        discordWebhook = config("General", "DiscordWebhookURL", "", "Optional Discord webhook URL.");
-        lockConfig = config("General", "Lock Configuration", false,
+        lockConfig = config("1 - General", "Lock Configuration", false,
             "If on, the configuration is locked and can be changed by server admins only. [Synced with Server]");
+        checkInterval = config("1 - General", "CheckIntervalSeconds", 300, "How often to check unlock dates (seconds).");
+        discordWebhook = config("1 - General", "DiscordWebhookURL", "", "Optional Discord webhook URL.");
+
         configSync.AddLockingConfigEntry(lockConfig);
         configSync.AddConfigEntry(checkInterval);
         configSync.AddConfigEntry(discordWebhook);
 
         // Register bosses (first argument = altar prefab name)
         // Eikthyr altar prefab is "offeraltar_deer"
-        RegisterBoss("offeraltar_deer", "defeated_eikthyr", "TrophyDeer", "Eikthyr");
-        RegisterBoss("fire_button", "defeated_gdking", "AncientSeed", "The Elder");
-        RegisterBoss("offeraltar", "defeated_bonemass", "WitheredBone", "Bonemass");
-        RegisterBoss("offeraltar_dragon", "defeated_dragon", "DragonEgg", "Moder");
-        RegisterBoss("offeraltar_goblinking", "defeated_goblinking", "GoblinTotem", "Yagluth");
-        RegisterBoss("offeraltar_queen", "defeated_queen", "QueenTrophy", "The Queen");
-        RegisterBoss("offeraltar_fader", "defeated_fader", "Bell", "The Fader");
+        RegisterBoss(2, "Eikthyr", "offeraltar_deer", "defeated_eikthyr", "TrophyDeer");
+        RegisterBoss(3, "Elder", "fire_button", "defeated_gdking", "AncientSeed");
+        RegisterBoss(4, "Bonemass", "offeraltar", "defeated_bonemass", "WitheredBone");
+        RegisterBoss(5, "Moder", "offeraltar_dragon", "defeated_dragon", "DragonEgg");
+        RegisterBoss(6, "Yagluth", "offeraltar_goblinking", "defeated_goblinking", "GoblinTotem");
+        RegisterBoss(7, "Queen", "offeraltar_queen", "defeated_queen", "QueenTrophy");
+        RegisterBoss(8, "Fader", "offeraltar_fader", "defeated_fader", "Bell");
+
 
         foreach (BossEntry boss in bosses.Values)
         {
@@ -179,7 +185,7 @@ public class ScheduleBossFight : BaseUnityPlugin
         try
         {
             Config.Reload();
-            Logger.LogInfo("DateBasedBossUnlock config reloaded from disk.");
+            Logger.LogInfo("ScheduleBossFight config reloaded from disk.");
 
             // Reset per-boss runtime flags so new schedule is applied cleanly
             foreach (var boss in bosses.Values)
@@ -195,23 +201,51 @@ public class ScheduleBossFight : BaseUnityPlugin
         }
     }
 
-    private void RegisterBoss(string name, string key, string trophyName, string defaultDisplayName)
+    private void RegisterBoss(
+    int order,
+    string sectionName,
+    string altarPrefab,
+    string globalKey,
+    string trophyName)
     {
-        name = name.Trim();   // 🔒 prevent config crashes
-        key = key.Trim();
+        string section = $"{order} - Boss: {sectionName}";
 
-        bosses[name] = new BossEntry
+        var displayName = config(
+            section,
+            "DisplayName",
+            sectionName,
+            $"Name used in messages for {sectionName}"
+        );
+
+        var enabled = config(
+            section,
+            "Enabled",
+            true,
+            $"Enable scheduled unlock for {sectionName}"
+        );
+
+        var unlockAt = config(
+            section,
+            "UnlockAt",
+            "2026-01-01 18:00",
+            "Philippines time (GMT+8). Format: yyyy-MM-dd HH:mm[:ss]"
+        );
+
+        bosses[altarPrefab] = new BossEntry
         {
-            Key = key,
+            Section = section,
+            AltarPrefab = altarPrefab,
+            Key = globalKey,
             TrophyName = trophyName,
-            DisplayName = Config.Bind(name, "DisplayName", defaultDisplayName, $"Name used in messages for {name}"),
-            Enabled = Config.Bind(name, "Enabled", true, $"Enable unlock for {name}"),
-            UnlockAt = Config.Bind(name, "UnlockAt", "2026-01-01 00:00", "Philippines time (GMT+8). Formats: yyyy-MM-dd OR yyyy-MM-dd HH:mm OR yyyy-MM-dd HH:mm:ss"),
-            BroadcastedTomorrow = false,
+            DisplayName = displayName,
+            Enabled = enabled,
+            UnlockAt = unlockAt,
             BroadcastedCountdown = false,
+            BroadcastedTomorrow = false,
             UnlockedToday = false
         };
     }
+
 
 
     private IEnumerator DelayedCheck()
@@ -236,7 +270,7 @@ public class ScheduleBossFight : BaseUnityPlugin
 
             if (!TryGetUnlockAtUtc(boss, out var unlockAtUtc, out var error))
             {
-                Logger.LogWarning($"[DateBasedBossUnlock] Invalid UnlockAt for {kvp.Key}: {error}");
+                Logger.LogWarning($"[ScheduleBossFight] Invalid UnlockAt for {kvp.Key}: {error}");
                 continue;
             }
 
@@ -252,7 +286,7 @@ public class ScheduleBossFight : BaseUnityPlugin
             // Broadcast countdown if more than 1 day away
             if (!boss.BroadcastedCountdown && timeUntil.TotalDays > 1)
             {
-                SendGlobalMessage($"[DateBasedBossUnlock] {boss.DisplayName.Value} unlocks in {timeUntil.Days}d {timeUntil.Hours}h {timeUntil.Minutes}m.");
+                SendGlobalMessage($"[ScheduleBossFight] {boss.DisplayName.Value} unlocks in {timeUntil.Days}d {timeUntil.Hours}h {timeUntil.Minutes}m.");
                 SendDiscordMessage($"**{boss.DisplayName.Value}** unlocks in {timeUntil.Days}d {timeUntil.Hours}h {timeUntil.Minutes}m.");
                 boss.BroadcastedCountdown = true;
             }
@@ -260,7 +294,7 @@ public class ScheduleBossFight : BaseUnityPlugin
             // Broadcast 1 day before unlock
             if (!boss.BroadcastedTomorrow && nowUtc.ToOffset(PhilippinesUtcOffset).Date == unlockAtUtc.ToOffset(PhilippinesUtcOffset).AddDays(-1).Date)
             {
-                SendGlobalMessage($"[DateBasedBossUnlock] {boss.DisplayName.Value} unlocks tomorrow!");
+                SendGlobalMessage($"[ScheduleBossFight] {boss.DisplayName.Value} unlocks tomorrow!");
                 SendDiscordMessage($"**{boss.DisplayName.Value}** unlocks tomorrow!");
                 boss.BroadcastedTomorrow = true;
             }
@@ -272,7 +306,7 @@ public class ScheduleBossFight : BaseUnityPlugin
                 {
                     ZoneSystem.instance.SetGlobalKey(boss.Key);
                     Logger.LogInfo($"[UNLOCKED] {boss.DisplayName.Value} ({boss.Key}) at {nowUtc.LocalDateTime}");
-                    SendGlobalMessage($"[DateBasedBossUnlock] {boss.DisplayName.Value} is now unlocked!");
+                    SendGlobalMessage($"[ScheduleBossFight] {boss.DisplayName.Value} is now unlocked!");
                     SendDiscordMessage($"**{boss.DisplayName.Value}** is now unlocked!");
                     boss.UnlockedToday = true;
                 }
