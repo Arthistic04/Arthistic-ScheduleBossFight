@@ -11,7 +11,7 @@ using System.IO;
 using UnityEngine;
 using System.Globalization;
 
-[BepInPlugin("arthistic_scheduledbossfight", "Scheduled Boss Fight", "1.1.0")]
+[BepInPlugin("arthistic_scheduledbossfight", "Scheduled Boss Fight", "1.1.1")]
 [BepInProcess("valheim.exe")]
 [BepInProcess("valheim_server.exe")]
 public class ScheduleBossFight : BaseUnityPlugin
@@ -87,8 +87,8 @@ public class ScheduleBossFight : BaseUnityPlugin
         configSync = new ConfigSync("arthistic_scheduledbossfight")
         {
             DisplayName = "Scheduled Boss Fight",
-            CurrentVersion = "1.1.0",
-            MinimumRequiredVersion = "1.1.0",
+            CurrentVersion = "1.1.1",
+            MinimumRequiredVersion = "1.1.1",
             ModRequired = true
         };
 
