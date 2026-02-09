@@ -1,4 +1,4 @@
-﻿using BepInEx;
+using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
 using ServerSync;
@@ -39,7 +39,7 @@ public class ScheduleBossFight : BaseUnityPlugin
 
         public bool BroadcastedTomorrow;
         public bool BroadcastedCountdown;
-        public bool UnlockedToday;
+        public bool BroadcastedUnlocked;
     }
 
     private readonly Dictionary<string, BossEntry> bosses = new Dictionary<string, BossEntry>();
@@ -196,7 +196,7 @@ public class ScheduleBossFight : BaseUnityPlugin
             {
                 boss.BroadcastedCountdown = false;
                 boss.BroadcastedTomorrow = false;
-                boss.UnlockedToday = false;
+                boss.BroadcastedUnlocked = false;
             }
         }
         catch (Exception ex)
@@ -246,7 +246,7 @@ public class ScheduleBossFight : BaseUnityPlugin
             UnlockAt = unlockAt,
             BroadcastedCountdown = false,
             BroadcastedTomorrow = false,
-            UnlockedToday = false
+            BroadcastedUnlocked = false
         };
     }
 
@@ -278,10 +278,10 @@ public class ScheduleBossFight : BaseUnityPlugin
                 continue;
             }
 
-            // Skip if already unlocked
+            // Skip if boss was already defeated (game set the global key); no need to broadcast
             if (ZoneSystem.instance.GetGlobalKey(boss.Key))
             {
-                boss.UnlockedToday = true;
+                boss.BroadcastedUnlocked = true;
                 continue;
             }
 
@@ -303,21 +303,13 @@ public class ScheduleBossFight : BaseUnityPlugin
                 boss.BroadcastedTomorrow = true;
             }
 
-            // Unlock today
-            if (!boss.UnlockedToday && nowUtc >= unlockAtUtc)
+            // On configured date: allow summoning (do not set global key — game sets it when boss is defeated)
+            if (!boss.BroadcastedUnlocked && nowUtc >= unlockAtUtc)
             {
-                try
-                {
-                    ZoneSystem.instance.SetGlobalKey(boss.Key);
-                    Logger.LogInfo($"[UNLOCKED] {boss.DisplayName.Value} ({boss.Key}) at {nowUtc.LocalDateTime}");
-                    SendGlobalMessage($"[ScheduleBossFight] {boss.DisplayName.Value} is now unlocked!");
-                    SendDiscordMessage($"**{boss.DisplayName.Value}** is now unlocked!");
-                    boss.UnlockedToday = true;
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogWarning($"Failed to unlock {boss.Key}: {ex.Message}");
-                }
+                Logger.LogInfo($"[ScheduleBossFight] {boss.DisplayName.Value} summoning is now allowed (date reached).");
+                SendGlobalMessage($"[ScheduleBossFight] {boss.DisplayName.Value} is now available to summon!");
+                SendDiscordMessage($"**{boss.DisplayName.Value}** is now available to summon!");
+                boss.BroadcastedUnlocked = true;
             }
         }
     }
