@@ -11,11 +11,12 @@ using System.IO;
 using UnityEngine;
 using System.Globalization;
 
-[BepInPlugin("arthistic_scheduledbossfight", "Scheduled Boss Fight", "1.0.4")]
+[BepInPlugin("arthistic_scheduledbossfight", "Scheduled Boss Fight", "1.1.0")]
 [BepInProcess("valheim.exe")]
 [BepInProcess("valheim_server.exe")]
 public class ScheduleBossFight : BaseUnityPlugin
 {
+
     private ConfigSync configSync;
     private ConfigEntry<bool> lockConfig;
     private ConfigEntry<int> checkInterval;
@@ -86,8 +87,11 @@ public class ScheduleBossFight : BaseUnityPlugin
         configSync = new ConfigSync("arthistic_scheduledbossfight")
         {
             DisplayName = "Scheduled Boss Fight",
-            CurrentVersion = "1.0.4"
+            CurrentVersion = "1.1.0",
+            MinimumRequiredVersion = "1.1.0",
+            ModRequired = true
         };
+
         lockConfig = config("1 - General", "Lock Configuration", false,
             "If on, the configuration is locked and can be changed by server admins only. [Synced with Server]");
         checkInterval = config("1 - General", "CheckIntervalSeconds", 300, "How often to check unlock dates (seconds).");

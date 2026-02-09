@@ -1,0 +1,9 @@
+{
+  "name": "ArthisticScheduleBossFight",
+  "version_number": "1.1.0",
+  "website_url": "https://github.com/Arthistic04/Arthistic-ScheduleBossFight",
+  "description": "Schedule Valheim boss unlocks to real-life dates (Philippines GMT+8). Optional Discord webhooks and config sync.",
+  "dependencies": [
+    "denikson-BepInExPack_Valheim-5.4.2202"
+  ]
+}
