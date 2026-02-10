@@ -1,5 +1,5 @@
 {
-  "name": "Arthistic-ScheduleBossFight",
+  "name": "ArthisticScheduleBossFight",
   "version_number": "1.1.2",
   "website_url": "https://github.com/Arthistic04/Arthistic-ScheduleBossFight",
   "description": "Schedule Valheim boss unlocks to real-life dates (configurable timezone). Optional Discord webhooks and config sync.",

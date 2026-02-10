@@ -51,7 +51,7 @@ Config file: `BepInEx/config/arthistic_scheduledbossfight.cfg`
 |--------|-------------|
 | **DisplayName** | Name used in chat/Discord messages. |
 | **Enabled** | Turn scheduled unlock on/off for this boss. |
-| **UnlockAt** | Date and time in **Philippines (GMT+8)**. Format: `yyyy-MM-dd` or `yyyy-MM-dd HH:mm` or `yyyy-MM-dd HH:mm:ss`. |
+| **UnlockAt** | Date and time. Format: `yyyy-MM-dd` or `yyyy-MM-dd HH:mm` or `yyyy-MM-dd HH:mm:ss`. |
 
 **Example:** `UnlockAt = 2027-01-01 18:00` → boss unlocks on 1 Jan 2027 at 18:00 Philippines time.
 
