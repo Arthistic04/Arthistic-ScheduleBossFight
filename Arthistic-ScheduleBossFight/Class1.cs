@@ -11,7 +11,7 @@ using System.IO;
 using UnityEngine;
 using System.Globalization;
 
-[BepInPlugin("arthistic_scheduledbossfight", "Scheduled Boss Fight", "1.1.1")]
+[BepInPlugin("arthistic_scheduledbossfight", "Scheduled Boss Fight", "1.1.2")]
 [BepInProcess("valheim.exe")]
 [BepInProcess("valheim_server.exe")]
 public class ScheduleBossFight : BaseUnityPlugin
@@ -20,6 +20,8 @@ public class ScheduleBossFight : BaseUnityPlugin
     private ConfigSync configSync;
     private ConfigEntry<bool> lockConfig;
     private ConfigEntry<int> checkInterval;
+    private ConfigEntry<int> utcOffsetHours;
+    private ConfigEntry<int> discordNotifyMinutesBefore;
     private ConfigEntry<string> discordWebhook;
     private Harmony harmony;
     private FileSystemWatcher configWatcher;
@@ -39,18 +41,16 @@ public class ScheduleBossFight : BaseUnityPlugin
 
         public bool BroadcastedTomorrow;
         public bool BroadcastedCountdown;
+        public bool BroadcastedMinutesBefore;
         public bool BroadcastedUnlocked;
     }
 
     private readonly Dictionary<string, BossEntry> bosses = new Dictionary<string, BossEntry>();
 
-    // Philippines time is fixed UTC+8 (no DST)
-    private static readonly TimeSpan PhilippinesUtcOffset = TimeSpan.FromHours(8);
-
-    private static bool TryGetUnlockAtUtc(BossEntry boss, out DateTimeOffset unlockAtUtc, out string error)
+    private static bool TryGetUnlockAtUtc(BossEntry boss, TimeSpan utcOffset, out DateTimeOffset unlockAtUtc, out string error)
     {
         // Accept:
-        // - "yyyy-MM-dd" (assumed 00:00 PH time)
+        // - "yyyy-MM-dd" (assumed 00:00 in configured timezone)
         // - "yyyy-MM-dd HH:mm"
         // - "yyyy-MM-dd HH:mm:ss"
         var raw = (boss.UnlockAt?.Value ?? string.Empty).Trim();
@@ -62,24 +62,27 @@ public class ScheduleBossFight : BaseUnityPlugin
         }
 
         string[] formats = { "yyyy-MM-dd", "yyyy-MM-dd HH:mm", "yyyy-MM-dd HH:mm:ss" };
-        if (!DateTime.TryParseExact(raw, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var localPhilippines))
+        if (!DateTime.TryParseExact(raw, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var localTime))
         {
             unlockAtUtc = default;
-            error = $"invalid format \"{raw}\" (expected yyyy-MM-dd[ HH:mm[:ss]] in PH time)";
+            error = $"invalid format \"{raw}\" (expected yyyy-MM-dd[ HH:mm[:ss]] in configured timezone)";
             return false;
         }
 
-        // Treat parsed DateTime as Philippines local time (Unspecified kind).
-        var unlockAtPhilippines = new DateTimeOffset(DateTime.SpecifyKind(localPhilippines, DateTimeKind.Unspecified), PhilippinesUtcOffset);
-        unlockAtUtc = unlockAtPhilippines.ToUniversalTime();
+        // Treat parsed DateTime as local time in the configured offset (Unspecified kind).
+        var unlockAtLocal = new DateTimeOffset(DateTime.SpecifyKind(localTime, DateTimeKind.Unspecified), utcOffset);
+        unlockAtUtc = unlockAtLocal.ToUniversalTime();
         error = string.Empty;
         return true;
     }
 
-    private static string FormatPhilippines(DateTimeOffset utc)
+    private static string FormatLocalTime(DateTimeOffset utc, TimeSpan utcOffset)
     {
-        var ph = utc.ToOffset(PhilippinesUtcOffset);
-        return ph.ToString("MMMM dd, yyyy HH:mm", CultureInfo.InvariantCulture) + " (PH / GMT+8)";
+        var local = utc.ToOffset(utcOffset);
+        string gmtLabel = utcOffset >= TimeSpan.Zero
+            ? $"GMT+{utcOffset.TotalHours:0}"
+            : $"GMT{utcOffset.TotalHours:0}";
+        return local.ToString("MMMM dd, yyyy HH:mm", CultureInfo.InvariantCulture) + " (" + gmtLabel + ")";
     }
 
     private void Awake()
@@ -87,18 +90,24 @@ public class ScheduleBossFight : BaseUnityPlugin
         configSync = new ConfigSync("arthistic_scheduledbossfight")
         {
             DisplayName = "Scheduled Boss Fight",
-            CurrentVersion = "1.1.1",
-            MinimumRequiredVersion = "1.1.1",
+            CurrentVersion = "1.1.2",
+            MinimumRequiredVersion = "1.1.2",
             ModRequired = true
         };
 
-        lockConfig = config("1 - General", "Lock Configuration", false,
+        lockConfig = config("1 - General", "Lock Configuration", true,
             "If on, the configuration is locked and can be changed by server admins only. [Synced with Server]");
-        checkInterval = config("1 - General", "CheckIntervalSeconds", 300, "How often to check unlock dates (seconds).");
+        checkInterval = config("1 - General", "CheckIntervalSeconds", 1800, "How often to check unlock dates (seconds).");
+        utcOffsetHours = config("1 - General", "UtcOffsetHours", 8,
+            "Timezone offset from UTC in hours (e.g. 8 for Philippines GMT+8, -5 for EST). UnlockAt times are interpreted in this timezone.");
+        discordNotifyMinutesBefore = config("1 - General", "DiscordNotifyMinutesBefore", 30,
+            "Send a Discord message this many minutes before a boss unlocks (0 = disabled).");
         discordWebhook = config("1 - General", "DiscordWebhookURL", "", "Optional Discord webhook URL.");
 
         configSync.AddLockingConfigEntry(lockConfig);
         configSync.AddConfigEntry(checkInterval);
+        configSync.AddConfigEntry(utcOffsetHours);
+        configSync.AddConfigEntry(discordNotifyMinutesBefore);
         configSync.AddConfigEntry(discordWebhook);
 
         // Register bosses (first argument = altar prefab name)
@@ -128,6 +137,8 @@ public class ScheduleBossFight : BaseUnityPlugin
         // Watch config file for external edits so changes apply without restart
         SetupConfigWatcher();
     }
+
+    private TimeSpan GetDisplayTimeZoneOffset() => TimeSpan.FromHours(utcOffsetHours.Value);
 
     /*private void OnDestroy()
     {
@@ -196,6 +207,7 @@ public class ScheduleBossFight : BaseUnityPlugin
             {
                 boss.BroadcastedCountdown = false;
                 boss.BroadcastedTomorrow = false;
+                boss.BroadcastedMinutesBefore = false;
                 boss.BroadcastedUnlocked = false;
             }
         }
@@ -232,7 +244,7 @@ public class ScheduleBossFight : BaseUnityPlugin
             section,
             "UnlockAt",
             "2027-01-01 18:00",
-            "Philippines time (GMT+8). Format: yyyy-MM-dd HH:mm[:ss]"
+            "Local time (see UtcOffsetHours). Format: yyyy-MM-dd HH:mm[:ss]"
         );
 
         bosses[altarPrefab] = new BossEntry
@@ -246,6 +258,7 @@ public class ScheduleBossFight : BaseUnityPlugin
             UnlockAt = unlockAt,
             BroadcastedCountdown = false,
             BroadcastedTomorrow = false,
+            BroadcastedMinutesBefore = false,
             BroadcastedUnlocked = false
         };
     }
@@ -272,7 +285,7 @@ public class ScheduleBossFight : BaseUnityPlugin
             var boss = kvp.Value;
             if (!boss.Enabled.Value) continue;
 
-            if (!TryGetUnlockAtUtc(boss, out var unlockAtUtc, out var error))
+            if (!TryGetUnlockAtUtc(boss, GetDisplayTimeZoneOffset(), out var unlockAtUtc, out var error))
             {
                 Logger.LogWarning($"[ScheduleBossFight] Invalid UnlockAt for {kvp.Key}: {error}");
                 continue;
@@ -287,41 +300,37 @@ public class ScheduleBossFight : BaseUnityPlugin
 
             var timeUntil = unlockAtUtc - nowUtc;
 
-            // Broadcast countdown if more than 1 day away
+            // Discord: countdown if more than 1 day away
             if (!boss.BroadcastedCountdown && timeUntil.TotalDays > 1)
             {
-                SendGlobalMessage($"[ScheduleBossFight] {boss.DisplayName.Value} unlocks in {timeUntil.Days}d {timeUntil.Hours}h {timeUntil.Minutes}m.");
                 SendDiscordMessage($"**{boss.DisplayName.Value}** unlocks in {timeUntil.Days}d {timeUntil.Hours}h {timeUntil.Minutes}m.");
                 boss.BroadcastedCountdown = true;
             }
 
-            // Broadcast 1 day before unlock
-            if (!boss.BroadcastedTomorrow && nowUtc.ToOffset(PhilippinesUtcOffset).Date == unlockAtUtc.ToOffset(PhilippinesUtcOffset).AddDays(-1).Date)
+            // Discord: 1 day before unlock
+            var tzOffset = GetDisplayTimeZoneOffset();
+            if (!boss.BroadcastedTomorrow && nowUtc.ToOffset(tzOffset).Date == unlockAtUtc.ToOffset(tzOffset).AddDays(-1).Date)
             {
-                SendGlobalMessage($"[ScheduleBossFight] {boss.DisplayName.Value} unlocks tomorrow!");
                 SendDiscordMessage($"**{boss.DisplayName.Value}** unlocks tomorrow!");
                 boss.BroadcastedTomorrow = true;
+            }
+
+            // Discord: X minutes before unlock (configurable; 0 = disabled)
+            int notifyMins = discordNotifyMinutesBefore.Value;
+            if (notifyMins > 0 && !boss.BroadcastedMinutesBefore && timeUntil.TotalMinutes <= notifyMins && timeUntil > TimeSpan.Zero)
+            {
+                SendDiscordMessage($"**{boss.DisplayName.Value}** unlocks in {notifyMins} minutes!");
+                boss.BroadcastedMinutesBefore = true;
             }
 
             // On configured date: allow summoning (do not set global key — game sets it when boss is defeated)
             if (!boss.BroadcastedUnlocked && nowUtc >= unlockAtUtc)
             {
                 Logger.LogInfo($"[ScheduleBossFight] {boss.DisplayName.Value} summoning is now allowed (date reached).");
-                SendGlobalMessage($"[ScheduleBossFight] {boss.DisplayName.Value} is now available to summon!");
                 SendDiscordMessage($"**{boss.DisplayName.Value}** is now available to summon!");
                 boss.BroadcastedUnlocked = true;
             }
         }
-    }
-
-    private void SendGlobalMessage(string message)
-    {
-        foreach (ZNetPeer peer in ZNet.instance.GetPeers())
-        {
-            if (peer.m_rpc != null)
-                peer.m_rpc.Invoke("ChatMessage", new object[] { message, 0 });
-        }
-        Logger.LogInfo("[CHAT] " + message);
     }
 
     private void SendDiscordMessage(string message)
@@ -367,11 +376,11 @@ public class ScheduleBossFight : BaseUnityPlugin
                 if (!boss.Value.Enabled.Value)
                     continue;
 
-                if (!TryGetUnlockAtUtc(boss.Value, out var unlockAtUtc, out _))
+                if (!TryGetUnlockAtUtc(boss.Value, plugin.GetDisplayTimeZoneOffset(), out var unlockAtUtc, out _))
                     continue;
 
-                // Match altar prefab name
-                if (altarPrefab.IndexOf(boss.Key, StringComparison.OrdinalIgnoreCase) < 0)
+                // Match altar prefab name exactly (e.g. offeraltar_deer vs offeraltar)
+                if (!string.Equals(altarPrefab, boss.Key, StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 // Already unlocked → allow summon
@@ -383,7 +392,7 @@ public class ScheduleBossFight : BaseUnityPlugin
                 {
                     user.Message(
                         MessageHud.MessageType.Center,
-                        $"{boss.Value.DisplayName.Value} cannot be summoned until {FormatPhilippines(unlockAtUtc)}"
+                        $"{boss.Value.DisplayName.Value} cannot be summoned until {FormatLocalTime(unlockAtUtc, plugin.GetDisplayTimeZoneOffset())}"
                     );
                     return false;
                 }
@@ -421,11 +430,11 @@ public class ScheduleBossFight : BaseUnityPlugin
                 if (!boss.Value.Enabled.Value)
                     continue;
 
-                if (!TryGetUnlockAtUtc(boss.Value, out var unlockAtUtc, out _))
+                if (!TryGetUnlockAtUtc(boss.Value, plugin.GetDisplayTimeZoneOffset(), out var unlockAtUtc, out _))
                     continue;
 
-                // Match altar prefab
-                if (altarPrefab.IndexOf(boss.Key, StringComparison.OrdinalIgnoreCase) < 0)
+                // Match altar prefab exactly (e.g. offeraltar_deer vs offeraltar)
+                if (!string.Equals(altarPrefab, boss.Key, StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 // Match required offering item (by prefab or shared name)
@@ -442,7 +451,7 @@ public class ScheduleBossFight : BaseUnityPlugin
                 {
                     user.Message(
                         MessageHud.MessageType.Center,
-                        $"{boss.Value.DisplayName.Value} cannot be summoned until {FormatPhilippines(unlockAtUtc)}"
+                        $"{boss.Value.DisplayName.Value} cannot be summoned until {FormatLocalTime(unlockAtUtc, plugin.GetDisplayTimeZoneOffset())}"
                     );
 
                     // Pretend success so vanilla Interact logic

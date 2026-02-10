@@ -6,7 +6,7 @@ A **Valheim** BepInEx mod that unlocks bosses on real-life dates. Set a date and
 
 ## Features
 
-- **Date-based unlock** — Configure unlock date/time per boss (Eikthyr, Elder, Bonemass, Moder, Yagluth, Queen, Fader). All times are in **Philippines (GMT+8)**.
+- **Date-based unlock** — Configure unlock utc offset/date/time per boss (Eikthyr, Elder, Bonemass, Moder, Yagluth, Queen, Fader).
 - **Blocks early summon** — Prevents using boss altars or offering items before the scheduled unlock.
 - **In-game messages** — Countdown and “unlocks tomorrow” / “unlocked” messages to all connected players.
 - **Optional Discord** — Send the same announcements to a Discord channel via webhook.
@@ -41,8 +41,8 @@ Config file: `BepInEx/config/arthistic_scheduledbossfight.cfg`
 
 | Setting | Default | Description |
 |--------|---------|-------------|
-| **Lock Configuration** | `false` | If enabled, only server admins can change config (synced via ServerSync). |
-| **CheckIntervalSeconds** | `300` | How often the mod checks unlock dates (seconds). |
+| **Lock Configuration** | `true` | If enabled, only server admins can change config (synced via ServerSync). |
+| **CheckIntervalSeconds** | `1800` | How often the mod checks unlock dates (seconds). |
 | **DiscordWebhookURL** | *(empty)* | Optional Discord webhook URL for unlock/countdown messages. |
 
 ### Per-boss (e.g. Eikthyr, Elder, Bonemass, …)
@@ -73,3 +73,10 @@ Config file: `BepInEx/config/arthistic_scheduledbossfight.cfg`
 - **Source:** [GitHub – Arthistic04/Arthistic-ScheduleBossFight](https://github.com/Arthistic04/Arthistic-ScheduleBossFight)
 
 ---
+
+## Changelog
+| Setting | Description |
+|---------|-------------|
+| **1.1.2** | UTC Offset set to configurable |
+| **1.1.1** | Removed global key (defeated_eikthyr etc.) after the configured date, Error on me |
+| **1.1.0** | Release for production |
