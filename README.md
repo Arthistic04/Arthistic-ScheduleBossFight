@@ -43,6 +43,8 @@ Config file: `BepInEx/config/arthistic_scheduledbossfight.cfg`
 |--------|---------|-------------|
 | **Lock Configuration** | `true` | If enabled, only server admins can change config (synced via ServerSync). |
 | **CheckIntervalSeconds** | `1800` | How often the mod checks unlock dates (seconds). |
+| **UtcOffsetHours** | `8` | Timezone offset from UTC in hours (e.g. 8 for Philippines GMT+8, -5 for EST). UnlockAt times are interpreted in this timezone. |
+| **DiscordNotifyMinutesBefore** | `30` | Send a Discord message this many minutes before a boss unlocks (0 = disabled). |
 | **DiscordWebhookURL** | *(empty)* | Optional Discord webhook URL for unlock/countdown messages. |
 
 ### Per-boss (e.g. Eikthyr, Elder, Bonemass, …)
@@ -53,7 +55,7 @@ Config file: `BepInEx/config/arthistic_scheduledbossfight.cfg`
 | **Enabled** | Turn scheduled unlock on/off for this boss. |
 | **UnlockAt** | Date and time in **Philippines (GMT+8)**. Format: `yyyy-MM-dd` or `yyyy-MM-dd HH:mm` or `yyyy-MM-dd HH:mm:ss`. |
 
-**Example:** `UnlockAt = 2027-01-01 18:00` → boss unlocks on 1 Jan 2027 at 18:00 Philippines time.
+**Example:** `UnlockAt = 2027-01-01 18:00:00` → boss unlocks on 1 Jan 2027 at 18:00 Philippines time.
 
 ---
 

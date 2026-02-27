@@ -5,13 +5,15 @@ using ServerSync;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
-using System.IO;
+using System.Text;
 using UnityEngine;
 using System.Globalization;
+using System.Reflection;
 
-[BepInPlugin("arthistic_scheduledbossfight", "Scheduled Boss Fight", "1.1.2")]
+[BepInPlugin("arthistic_scheduledbossfight", "Scheduled Boss Fight", "1.1.3")]
 [BepInProcess("valheim.exe")]
 [BepInProcess("valheim_server.exe")]
 public class ScheduleBossFight : BaseUnityPlugin
@@ -90,8 +92,8 @@ public class ScheduleBossFight : BaseUnityPlugin
         configSync = new ConfigSync("arthistic_scheduledbossfight")
         {
             DisplayName = "Scheduled Boss Fight",
-            CurrentVersion = "1.1.2",
-            MinimumRequiredVersion = "1.1.2",
+            CurrentVersion = "1.1.3",
+            MinimumRequiredVersion = "1.1.3",
             ModRequired = true
         };
 
@@ -243,7 +245,7 @@ public class ScheduleBossFight : BaseUnityPlugin
         var unlockAt = config(
             section,
             "UnlockAt",
-            "2027-01-01 18:00",
+            "2027-01-01 18:00:00",
             "Local time (see UtcOffsetHours). Format: yyyy-MM-dd HH:mm[:ss]"
         );
 
@@ -315,11 +317,12 @@ public class ScheduleBossFight : BaseUnityPlugin
                 boss.BroadcastedTomorrow = true;
             }
 
-            // Discord: X minutes before unlock (configurable; 0 = disabled)
+            // Discord: X minutes before unlock (configurable; 0 = disabled). Message uses actual time left.
             int notifyMins = discordNotifyMinutesBefore.Value;
             if (notifyMins > 0 && !boss.BroadcastedMinutesBefore && timeUntil.TotalMinutes <= notifyMins && timeUntil > TimeSpan.Zero)
             {
-                SendDiscordMessage($"**{boss.DisplayName.Value}** unlocks in {notifyMins} minutes!");
+                int minsLeft = (int)Math.Ceiling(timeUntil.TotalMinutes);
+                SendDiscordMessage($"**{boss.DisplayName.Value}** unlocks in {minsLeft} minutes!");
                 boss.BroadcastedMinutesBefore = true;
             }
 
@@ -327,32 +330,122 @@ public class ScheduleBossFight : BaseUnityPlugin
             if (!boss.BroadcastedUnlocked && nowUtc >= unlockAtUtc)
             {
                 Logger.LogInfo($"[ScheduleBossFight] {boss.DisplayName.Value} summoning is now allowed (date reached).");
-                SendDiscordMessage($"**{boss.DisplayName.Value}** is now available to summon!");
+                SendDiscordMessage($"⚔ **{boss.DisplayName.Value}** is now available to summon! ⚔");
+                SendCenterMessage($"⚔ {boss.DisplayName.Value} is now available to summon! ⚔");
                 boss.BroadcastedUnlocked = true;
             }
         }
     }
 
+    private void SendCenterMessage(string message)
+    {
+        if (ZNet.instance == null || !ZNet.instance.IsServer())
+            return;
+
+        ZRoutedRpc.instance.InvokeRoutedRPC(
+            ZRoutedRpc.Everybody,
+            "ScheduleBossFight_ShowCenter",
+            message);
+
+        Logger.LogInfo("[ScheduleBossFight] Center message broadcast.");
+    }
+
+    private static string EscapeJsonString(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        return s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "\\r").Replace("\n", "\\n");
+    }
+
     private void SendDiscordMessage(string message)
     {
-        if (string.IsNullOrEmpty(discordWebhook.Value)) return;
+        var url = discordWebhook?.Value?.Trim();
+        if (string.IsNullOrEmpty(url))
+        {
+            Logger.LogInfo("[ScheduleBossFight] Discord webhook URL is empty; skipping Discord message.");
+            return;
+        }
+
+        string payload;
+        try
+        {
+            string escaped = EscapeJsonString(message);
+            payload = "{\"content\": \"" + escaped + "\"}";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"[ScheduleBossFight] Failed to build Discord payload: {ex}");
+            return;
+        }
+
+        Logger.LogInfo($"[ScheduleBossFight] Sending Discord message: {message}");
 
         try
         {
             using (var client = new WebClient())
             {
-                client.Headers[System.Net.HttpRequestHeader.ContentType] = "application/json";
-                string payload = $"{{\"content\": \"{message}\"}}";
-                client.UploadString(discordWebhook.Value, payload);
+                client.Headers[HttpRequestHeader.ContentType] = "application/json";
+                client.Encoding = Encoding.UTF8;
+                client.UploadString(url, "POST", payload);
             }
+            Logger.LogInfo("[ScheduleBossFight] Discord message sent.");
+        }
+        catch (WebException ex)
+        {
+            string detail = ex.Message;
+            if (ex.Response is HttpWebResponse resp)
+            {
+                try
+                {
+                    using (var reader = new StreamReader(resp.GetResponseStream()))
+                        detail = reader.ReadToEnd();
+                }
+                catch { /* ignore */ }
+            }
+            Logger.LogError($"[ScheduleBossFight] Failed to send Discord message: {ex.Status} - {detail}");
         }
         catch (Exception ex)
         {
-            Logger.LogWarning("Failed to send Discord message: " + ex.Message);
+            Logger.LogError($"[ScheduleBossFight] Failed to send Discord message: {ex}");
         }
     }
 
     // ---------------- Harmony patch ----------------
+    [HarmonyPatch(typeof(ZNetScene), "Awake")]
+    private static class ScheduleBossFight_RPC
+    {
+        private static void Postfix()
+        {
+            if (ZRoutedRpc.instance == null)
+                return;
+
+            ZRoutedRpc.instance.Register<string>(
+                "ScheduleBossFight_ShowCenter",
+                RPC_ShowCenterMessage);
+        }
+
+        private static void RPC_ShowCenterMessage(long sender, string message)
+        {
+            if (MessageHud.instance == null) return;
+            MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, message);
+            // Re-show a few times so the message stays visible longer (game default fades too fast)
+            var plugin = BepInEx.Bootstrap.Chainloader.ManagerObject?.GetComponent<ScheduleBossFight>();
+            if (plugin != null)
+                plugin.StartCoroutine(plugin.ReshowCenterMessageCoroutine(message));
+        }
+    }
+
+    private IEnumerator ReshowCenterMessageCoroutine(string message)
+    {
+        const float interval = 2.5f;
+        const int repeats = 2;
+        for (int i = 0; i < repeats; i++)
+        {
+            yield return new WaitForSeconds(interval);
+            if (MessageHud.instance != null)
+                MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, message);
+        }
+    }
+
     [HarmonyPatch(typeof(OfferingBowl), nameof(OfferingBowl.Interact))]
     public static class PreventEarlyBossSummon
     {
